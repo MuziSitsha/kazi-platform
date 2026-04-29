@@ -1,0 +1,29 @@
+{
+  "name": "kazi-platform",
+  "version": "1.0.0",
+  "private": true,
+  "description": "KAZI - On-Demand Services Platform for South Africa",
+  "workspaces": [
+    "apps/*",
+    "packages/*"
+  ],
+  "scripts": {
+    "dev:api": "yarn workspace @kazi/api dev",
+    "dev:admin": "yarn workspace @kazi/admin dev",
+    "build:api": "yarn workspace @kazi/api build",
+    "build:admin": "yarn workspace @kazi/admin build",
+    "lint": "yarn workspaces run lint",
+    "test": "yarn workspaces run test",
+    "db:migrate": "yarn workspace @kazi/api migration:run",
+    "db:seed": "yarn workspace @kazi/api seed:run"
+  },
+  "devDependencies": {
+    "prettier": "^3.2.5",
+    "eslint": "^8.57.0",
+    "typescript": "^5.4.5"
+  },
+  "engines": {
+    "node": ">=20.0.0",
+    "yarn": ">=1.22.0"
+  }
+}

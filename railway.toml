@@ -1,0 +1,20 @@
+# railway.toml - KAZI API deployment on Railway.app
+# This replaces the R1,800/month AWS ECS setup with ~R190/month
+
+[build]
+builder = "NIXPACKS"
+buildCommand = "yarn install && yarn build:api"
+
+[deploy]
+startCommand = "node apps/api/dist/main.js"
+healthcheckPath = "/api/v1/health"
+healthcheckTimeout = 300
+restartPolicyType = "ON_FAILURE"
+restartPolicyMaxRetries = 3
+
+[[services]]
+name = "kazi-api"
+
+[services.variables]
+NODE_ENV = "production"
+PORT = "3001"

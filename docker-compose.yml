@@ -1,0 +1,36 @@
+version: '3.8'
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: kazi-postgres
+    environment:
+      POSTGRES_USER: kazi
+      POSTGRES_PASSWORD: kazi_dev
+      POSTGRES_DB: kazi_db
+    ports:
+      - '5432:5432'
+    volumes:
+      - kazi_postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U kazi']
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  redis:
+    image: redis:7-alpine
+    container_name: kazi-redis
+    ports:
+      - '6379:6379'
+    volumes:
+      - kazi_redis_data:/data
+    healthcheck:
+      test: ['CMD', 'redis-cli', 'ping']
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+volumes:
+  kazi_postgres_data:
+  kazi_redis_data:
