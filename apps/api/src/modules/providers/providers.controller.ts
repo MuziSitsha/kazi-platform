@@ -11,6 +11,7 @@ import {
 import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
 import { AuthGuard } from '@nestjs/passport';
 import { ProvidersService } from './providers.service';
+import { SubmitProviderDocumentsDto } from './dto/submit-provider-documents.dto';
 import { UpsertProviderProfileDto } from './dto/upsert-provider-profile.dto';
 import { UpdateAvailabilityDto } from './dto/update-availability.dto';
 
@@ -55,5 +56,21 @@ export class ProvidersController {
   @ApiOperation({ summary: 'Toggle provider availability' })
   updateAvailability(@Request() req, @Body() dto: UpdateAvailabilityDto) {
     return this.providersService.updateAvailability(req.user.id, dto.isAvailable);
+  }
+
+  @Post('me/documents')
+  @ApiBearerAuth()
+  @UseGuards(AuthGuard('jwt'))
+  @ApiOperation({ summary: 'Submit provider verification documents' })
+  submitDocuments(@Request() req, @Body() dto: SubmitProviderDocumentsDto) {
+    return this.providersService.submitDocuments(req.user.id, dto.documents);
+  }
+
+  @Get('me/documents')
+  @ApiBearerAuth()
+  @UseGuards(AuthGuard('jwt'))
+  @ApiOperation({ summary: 'List current provider verification documents' })
+  listMyDocuments(@Request() req) {
+    return this.providersService.listMyDocuments(req.user.id);
   }
 }

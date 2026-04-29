@@ -1,13 +1,16 @@
 import {
+  BadRequestException,
   ForbiddenException,
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { IsNull, Repository } from 'typeorm';
+import { AdminService } from '../admin/admin.service';
+import { PaymentsService } from '../payments/payments.service';
 import { UserEntity, UserRole } from '../users/entities/user.entity';
 import { CreateBookingDto } from './dto/create-booking.dto';
-import { BookingEntity, BookingStatus } from './entities/booking.entity';
+import { BookingEntity, BookingStatus, PaymentStatus } from './entities/booking.entity';
 
 @Injectable()
 export class BookingsService {
@@ -16,16 +19,20 @@ export class BookingsService {
     private readonly bookingsRepository: Repository<BookingEntity>,
     @InjectRepository(UserEntity)
     private readonly usersRepository: Repository<UserEntity>,
+    private readonly adminService: AdminService,
+    private readonly paymentsService: PaymentsService,
   ) {}
 
   async createBooking(customerId: string, dto: CreateBookingDto) {
+    const commissionRate = await this.adminService.getEffectiveCommissionRate();
+
     const booking = this.bookingsRepository.create({
       ...dto,
       customerId,
       bookingRef: this.generateBookingRef(),
       finalPriceCents: dto.quotedPriceCents,
-      commissionCents: Math.round(dto.quotedPriceCents * 0.15),
-      providerEarningsCents: Math.round(dto.quotedPriceCents * 0.85),
+      commissionCents: Math.round(dto.quotedPriceCents * commissionRate),
+      providerEarningsCents: dto.quotedPriceCents - Math.round(dto.quotedPriceCents * commissionRate),
       scheduledAt: dto.scheduledAt ? new Date(dto.scheduledAt) : null,
     });
 
@@ -78,6 +85,10 @@ export class BookingsService {
       throw new ForbiddenException('Only the assigned provider can update this booking');
     }
 
+    if (booking.status === BookingStatus.CANCELLED) {
+      throw new BadRequestException('Cancelled bookings cannot be updated');
+    }
+
     booking.status = status;
     const now = new Date();
 
@@ -93,6 +104,11 @@ export class BookingsService {
         break;
       case BookingStatus.COMPLETED:
         booking.completedAt = now;
+        await this.paymentsService.settleBookingCompletion(booking, {
+          actorId: providerId,
+          actorRole: UserRole.PROVIDER,
+        });
+        booking.paymentStatus = PaymentStatus.PAID;
         break;
       default:
         break;

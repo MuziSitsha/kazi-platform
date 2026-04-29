@@ -7,6 +7,10 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { UserEntity, UserRole, UserStatus } from '../users/entities/user.entity';
 import {
+  ProviderDocumentEntity,
+  ProviderDocumentStatus,
+} from './entities/provider-document.entity';
+import {
   ProviderProfileEntity,
   ProviderVerificationStatus,
 } from './entities/provider-profile.entity';
@@ -17,6 +21,8 @@ export class ProvidersService {
   constructor(
     @InjectRepository(ProviderProfileEntity)
     private readonly providerProfilesRepository: Repository<ProviderProfileEntity>,
+    @InjectRepository(ProviderDocumentEntity)
+    private readonly providerDocumentsRepository: Repository<ProviderDocumentEntity>,
     @InjectRepository(UserEntity)
     private readonly usersRepository: Repository<UserEntity>,
   ) {}
@@ -78,5 +84,58 @@ export class ProvidersService {
     return profiles.filter((profile) =>
       (profile.serviceCategoryIds || []).includes(serviceCategoryId),
     );
+  }
+
+  async submitDocuments(
+    userId: string,
+    documents: Array<{
+      documentType: string;
+      fileName: string;
+      fileUrl?: string;
+      mimeType?: string;
+      sizeBytes?: number;
+    }>,
+  ) {
+    const profile = await this.providerProfilesRepository.findOne({ where: { userId } });
+    if (!profile) throw new NotFoundException('Provider profile not found');
+
+    await this.providerDocumentsRepository.delete({ userId });
+
+    const createdDocuments = documents.map((document) => this.providerDocumentsRepository.create({
+      userId,
+      documentType: document.documentType,
+      fileName: document.fileName,
+      fileUrl: document.fileUrl,
+      mimeType: document.mimeType,
+      sizeBytes: document.sizeBytes,
+      status: ProviderDocumentStatus.SUBMITTED,
+    }));
+    await this.providerDocumentsRepository.save(createdDocuments);
+
+    profile.documentsSubmitted = createdDocuments.length > 0;
+    profile.verificationStatus = ProviderVerificationStatus.PENDING;
+    profile.isAvailable = false;
+    await this.providerProfilesRepository.save(profile);
+
+    const user = await this.usersRepository.findOne({ where: { id: userId } });
+    if (user) {
+      user.status = UserStatus.PENDING_VERIFICATION;
+      await this.usersRepository.save(user);
+    }
+
+    return this.listMyDocuments(userId);
+  }
+
+  async listMyDocuments(userId: string) {
+    const documents = await this.providerDocumentsRepository.find({
+      where: { userId },
+      order: { createdAt: 'DESC' },
+    });
+
+    return {
+      userId,
+      count: documents.length,
+      documents,
+    };
   }
 }
