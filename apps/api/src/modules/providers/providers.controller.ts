@@ -2,16 +2,27 @@ import {
   Body,
   Controller,
   Get,
+  HttpCode,
   Patch,
   Post,
   Query,
   Request,
+  UploadedFile,
   UseGuards,
+  UseInterceptors,
 } from '@nestjs/common';
-import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
+import {
+  ApiBearerAuth,
+  ApiBody,
+  ApiConsumes,
+  ApiOperation,
+  ApiTags,
+} from '@nestjs/swagger';
 import { AuthGuard } from '@nestjs/passport';
+import { FileInterceptor } from '@nestjs/platform-express';
 import { ProvidersService } from './providers.service';
 import { SubmitProviderDocumentsDto } from './dto/submit-provider-documents.dto';
+import { UploadProviderDocumentDto } from './dto/upload-provider-document.dto';
 import { UpsertProviderProfileDto } from './dto/upsert-provider-profile.dto';
 import { UpdateAvailabilityDto } from './dto/update-availability.dto';
 
@@ -64,6 +75,31 @@ export class ProvidersController {
   @ApiOperation({ summary: 'Submit provider verification documents' })
   submitDocuments(@Request() req, @Body() dto: SubmitProviderDocumentsDto) {
     return this.providersService.submitDocuments(req.user.id, dto.documents);
+  }
+
+  @Post('me/documents/upload')
+  @HttpCode(201)
+  @ApiBearerAuth()
+  @UseGuards(AuthGuard('jwt'))
+  @UseInterceptors(FileInterceptor('file'))
+  @ApiConsumes('multipart/form-data')
+  @ApiBody({
+    schema: {
+      type: 'object',
+      required: ['documentType', 'file'],
+      properties: {
+        documentType: { type: 'string', example: 'national_id' },
+        file: { type: 'string', format: 'binary' },
+      },
+    },
+  })
+  @ApiOperation({ summary: 'Upload a provider verification document to S3' })
+  uploadDocument(
+    @Request() req,
+    @Body() dto: UploadProviderDocumentDto,
+    @UploadedFile() file: Express.Multer.File,
+  ) {
+    return this.providersService.uploadDocument(req.user.id, dto.documentType, file);
   }
 
   @Get('me/documents')
