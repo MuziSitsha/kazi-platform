@@ -1,8 +1,8 @@
 # KAZI Platform
 
-> AWS-hosted on-demand services MVP for South Africa
+> Johannesburg-first on-demand services MVP for South Africa
 
-Built for client requirements with Flutter · NestJS · PostgreSQL · AWS
+Built for the KAZI client brief with Flutter, NestJS, PostgreSQL, and an AWS deployment target.
 
 ---
 
@@ -24,7 +24,7 @@ kazi/
 └── package.json      # Monorepo root
 ```
 
-The repository now contains a working MVP foundation with live booking, provider onboarding, document upload, ratings and reviews, wallet and settlement bookkeeping, hosted online checkout initiation, admin operations, and AWS deployment workflows for the API and admin console.
+The repository contains a working MVP foundation for the customer app, provider app, and admin dashboard, with launch-critical integrations prepared for Firebase push, Twilio calling, Peach Payments, and AWS deployment.
 
 ---
 
@@ -89,10 +89,8 @@ flutter run
 5. Remaining realtime modules, launch hardening, and go-live readiness
 
 ### Timeline estimate
-- Foundation and core backend: 3 to 4 weeks
-- Mobile apps and admin dashboard: 4 to 6 weeks
-- Payments, realtime, analytics, and QA: 3 to 4 weeks
-- Total MVP target: 10 to 14 weeks
+- Remaining engineering and hardening from the current repository state: roughly 2 to 4 focused weeks
+- Fresh MVP build from scratch on the same scope: roughly 10 to 14 weeks
 
 ### AWS MVP cost estimate
 
@@ -136,12 +134,12 @@ See `apps/api/.env.example` for all required variables.
 | `bookings` | `/api/v1/bookings/*` | Booking engine (instant + scheduled) |
 | `services` | `/api/v1/services/*` | Service categories |
 | `payments` | `/api/v1/payments/*` | Cash settlement, wallet credits, and hosted Peach checkout initiation |
-| `chat` | WebSocket | Real-time messaging foundation |
+| `chat` | `/api/v1/chat/*` | Booking-scoped chat plus Twilio-ready call bridge |
 | `wallet` | `/api/v1/wallet/*` | Customer wallet & provider earnings |
 | `reviews` | `/api/v1/reviews/*` | Ratings & reviews |
 | `promos` | `/api/v1/promos/*` | Promo codes & referrals foundation |
 | `admin` | `/api/v1/admin/*` | Admin panel APIs |
-| `notifications` | Internal | Firebase FCM push foundation |
+| `notifications` | `/api/v1/notifications/*` | Stored notifications plus Firebase FCM delivery wiring |
 
 ## What Is Fully Implemented Now
 
@@ -154,6 +152,14 @@ See `apps/api/.env.example` for all required variables.
 - Hosted online checkout initiation for card and EFT bookings through Peach Payments
 - AWS deployment workflows for the Nest API and the admin dashboard
 - Proprietary source ownership declaration in the root license file
+
+## What Still Needs Final Integration Or Validation
+
+- Real Firebase credentials and device-level push validation
+- Real Twilio credentials and live call bridge validation
+- Real Peach credentials and end-to-end hosted payment validation
+- Final Android and iPhone device QA against one reachable API URL
+- Final AWS staging and production rollout
 
 ---
 

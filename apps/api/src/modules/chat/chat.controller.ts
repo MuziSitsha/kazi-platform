@@ -24,7 +24,7 @@ export class ChatController {
   }
 
   @Post('bookings/:bookingId/call')
-  @ApiOperation({ summary: 'Start a booking call and return the participant phone details' })
+  @ApiOperation({ summary: 'Start a booking call and return the active call session details' })
   startCall(@Request() req, @Param('bookingId') bookingId: string) {
     return this.chatService.startCall(bookingId, req.user.id);
   }

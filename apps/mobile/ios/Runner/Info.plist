@@ -28,6 +28,12 @@
 	<true/>
 	<key>NSLocationWhenInUseUsageDescription</key>
 	<string>KAZI uses your location to share live provider tracking with customers during active bookings.</string>
+	<key>NSUserNotificationUsageDescription</key>
+	<string>KAZI uses notifications to alert you about booking updates, messages, and call activity.</string>
+	<key>UIBackgroundModes</key>
+	<array>
+		<string>remote-notification</string>
+	</array>
 	<key>UIApplicationSceneManifest</key>
 	<dict>
 		<key>UIApplicationSupportsMultipleScenes</key>

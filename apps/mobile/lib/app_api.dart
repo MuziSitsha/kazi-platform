@@ -129,6 +129,18 @@ class KaziApiClient {
     );
   }
 
+  Future<void> updateFcmToken({
+    required String accessToken,
+    required String fcmToken,
+  }) async {
+    await _request(
+      'PATCH',
+      '/users/me/fcm-token',
+      accessToken: accessToken,
+      body: {'fcmToken': fcmToken},
+    );
+  }
+
   Future<List<ApiServiceCategory>> listCategories() async {
     final payload = await _request('GET', '/services/categories') as List<dynamic>;
     return payload
@@ -264,12 +276,15 @@ class KaziApiClient {
   Future<ApiHostedCheckout> createHostedCheckout({
     required String accessToken,
     required String bookingId,
+    String? returnUrl,
   }) async {
     final payload = await _request(
       'POST',
       '/payments/bookings/$bookingId/checkout',
       accessToken: accessToken,
-      body: {},
+      body: {
+        if (returnUrl != null && returnUrl.trim().isNotEmpty) 'returnUrl': returnUrl.trim(),
+      },
     ) as Map<String, dynamic>;
     return ApiHostedCheckout.fromJson(payload);
   }
@@ -940,6 +955,11 @@ class ApiBookingCall {
     required this.participantName,
     required this.participantPhone,
     required this.callLogId,
+    required this.callMode,
+    required this.callProvider,
+    required this.callStatus,
+    required this.statusMessage,
+    required this.startedAt,
   });
 
   final String bookingId;
@@ -947,6 +967,11 @@ class ApiBookingCall {
   final String participantName;
   final String participantPhone;
   final String callLogId;
+  final String callMode;
+  final String callProvider;
+  final String callStatus;
+  final String statusMessage;
+  final DateTime? startedAt;
 
   factory ApiBookingCall.fromJson(Map<String, dynamic> json) {
     return ApiBookingCall(
@@ -955,6 +980,11 @@ class ApiBookingCall {
       participantName: json['participantName'] as String? ?? 'Participant',
       participantPhone: json['participantPhone'] as String? ?? '',
       callLogId: json['callLogId'] as String? ?? '',
+      callMode: json['callMode'] as String? ?? 'phone_fallback',
+      callProvider: json['callProvider'] as String? ?? 'device_dialer',
+      callStatus: json['callStatus'] as String? ?? 'fallback_ready',
+      statusMessage: json['statusMessage'] as String? ?? '',
+      startedAt: ApiBooking._parseDate(json['startedAt']),
     );
   }
 }

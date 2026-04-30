@@ -2,6 +2,9 @@ import 'dart:async';
 import 'dart:math' as math;
 
 import 'package:file_picker/file_picker.dart';
+import 'package:firebase_core/firebase_core.dart';
+import 'package:firebase_messaging/firebase_messaging.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:url_launcher/url_launcher.dart';
@@ -19,6 +22,8 @@ const _destinations = [
     Icons.account_balance_wallet,
   ),
 ];
+
+const _paymentReturnUrl = String.fromEnvironment('KAZI_PAYMENT_RETURN_URL');
 
 const _serviceCategories = ['All', 'Cleaning', 'Electrical', 'Plumbing', 'Handyman'];
 
@@ -94,6 +99,36 @@ String _formatBookingSchedule(DateTime? scheduledAt, {required bool isScheduled}
   return '$when, $hour:$minute';
 }
 
+String _formatPaymentMethodLabel(String value) {
+  switch (value.toUpperCase()) {
+    case 'CARD':
+      return 'Card';
+    case 'EFT':
+      return 'EFT';
+    case 'WALLET':
+      return 'Wallet';
+    case 'CASH':
+      return 'Cash';
+    default:
+      return value.replaceAll('_', ' ');
+  }
+}
+
+String _formatPaymentStatusLabel(String value) {
+  switch (value.toUpperCase()) {
+    case 'PENDING':
+      return 'Pending';
+    case 'PAID':
+      return 'Paid';
+    case 'FAILED':
+      return 'Failed';
+    case 'REFUNDED':
+      return 'Refunded';
+    default:
+      return value.replaceAll('_', ' ');
+  }
+}
+
 IconData _iconForCategory(String label) {
   final key = label.toLowerCase();
   if (key.contains('clean')) return Icons.cleaning_services_outlined;
@@ -101,6 +136,57 @@ IconData _iconForCategory(String label) {
   if (key.contains('plumb')) return Icons.plumbing_outlined;
   if (key.contains('hand')) return Icons.handyman_outlined;
   return Icons.home_repair_service_outlined;
+}
+
+class _FirebaseRuntimeOptions {
+  static const String _apiKey = String.fromEnvironment('FIREBASE_API_KEY');
+  static const String _projectId = String.fromEnvironment('FIREBASE_PROJECT_ID');
+  static const String _messagingSenderId = String.fromEnvironment('FIREBASE_MESSAGING_SENDER_ID');
+  static const String _storageBucket = String.fromEnvironment('FIREBASE_STORAGE_BUCKET');
+  static const String _androidAppId = String.fromEnvironment('FIREBASE_ANDROID_APP_ID');
+  static const String _iosAppId = String.fromEnvironment('FIREBASE_IOS_APP_ID');
+  static const String _iosBundleId = String.fromEnvironment('FIREBASE_IOS_BUNDLE_ID');
+
+  static FirebaseOptions? get currentPlatform {
+    if (_apiKey.isEmpty || _projectId.isEmpty || _messagingSenderId.isEmpty) {
+      return null;
+    }
+
+    if (kIsWeb) {
+      return null;
+    }
+
+    if (defaultTargetPlatform == TargetPlatform.android) {
+      if (_androidAppId.isEmpty) {
+        return null;
+      }
+
+      return FirebaseOptions(
+        apiKey: _apiKey,
+        appId: _androidAppId,
+        messagingSenderId: _messagingSenderId,
+        projectId: _projectId,
+        storageBucket: _storageBucket.isEmpty ? null : _storageBucket,
+      );
+    }
+
+    if (defaultTargetPlatform == TargetPlatform.iOS) {
+      if (_iosAppId.isEmpty) {
+        return null;
+      }
+
+      return FirebaseOptions(
+        apiKey: _apiKey,
+        appId: _iosAppId,
+        messagingSenderId: _messagingSenderId,
+        projectId: _projectId,
+        storageBucket: _storageBucket.isEmpty ? null : _storageBucket,
+        iosBundleId: _iosBundleId.isEmpty ? null : _iosBundleId,
+      );
+    }
+
+    return null;
+  }
 }
 
 class _AppScope extends InheritedNotifier<_KaziController> {
@@ -115,6 +201,8 @@ class _AppScope extends InheritedNotifier<_KaziController> {
 }
 
 class _KaziController extends ChangeNotifier {
+  static const String _configuredPushToken = String.fromEnvironment('KAZI_FCM_TOKEN');
+
   _KaziController() {
     bootstrap();
   }
@@ -139,6 +227,12 @@ class _KaziController extends ChangeNotifier {
   List<_ProviderJobData> incomingJobs = const [];
   List<_ProviderJobData> acceptedJobs = const [];
   List<_WalletEntryData> walletHistory = List<_WalletEntryData>.of(_walletHistory);
+  void Function(String title, String body)? onForegroundPushMessage;
+
+  StreamSubscription<String>? _pushTokenRefreshSubscription;
+  StreamSubscription<RemoteMessage>? _foregroundMessageSubscription;
+  String? _devicePushToken;
+  String? _syncedPushToken;
 
   final Map<String, ApiService> _liveServicesById = {};
   final Map<String, ApiServiceCategory> _categoriesById = {};
@@ -151,6 +245,7 @@ class _KaziController extends ChangeNotifier {
   int get unreadNotifications => notifications.where((item) => !item.isRead).length;
 
   Future<void> bootstrap() async {
+    await _initializePushMessaging();
     await loadPublicCatalog();
     isBootstrapping = false;
     notifyListeners();
@@ -194,6 +289,7 @@ class _KaziController extends ChangeNotifier {
   }) async {
     session = await api.verifyOtp(phone: phone, code: code, role: role);
     currentUser = session!.user;
+    await _syncConfiguredPushToken();
     await refreshAuthenticatedData();
   }
 
@@ -211,6 +307,7 @@ class _KaziController extends ChangeNotifier {
     incomingJobs = const [];
     acceptedJobs = const [];
     walletHistory = List<_WalletEntryData>.of(_walletHistory);
+    _syncedPushToken = null;
     notifyListeners();
   }
 
@@ -221,6 +318,7 @@ class _KaziController extends ChangeNotifier {
     notifyListeners();
 
     try {
+      await _syncConfiguredPushToken();
       currentUser = await api.getMe(session!.accessToken);
       final liveBookings = await api.listMyBookings(session!.accessToken);
       final notificationFeed = await api.listNotifications(session!.accessToken);
@@ -421,6 +519,7 @@ class _KaziController extends ChangeNotifier {
     final checkout = await api.createHostedCheckout(
       accessToken: session!.accessToken,
       bookingId: booking.id,
+      returnUrl: _paymentReturnUrl.isEmpty ? null : _paymentReturnUrl,
     );
 
     final checkoutUrl = checkout.checkoutUrl;
@@ -433,6 +532,8 @@ class _KaziController extends ChangeNotifier {
     if (!launched) {
       throw KaziApiException('Could not open the payment link: $checkoutUrl');
     }
+
+    await refreshAuthenticatedData();
   }
 
   Future<void> updateLiveLocation(_BookingData booking) async {
@@ -567,6 +668,78 @@ class _KaziController extends ChangeNotifier {
       accessToken: session!.accessToken,
       bookingId: bookingId,
     );
+  }
+
+  Future<void> _syncConfiguredPushToken() async {
+    final pushToken = _devicePushToken ?? _configuredPushToken;
+    if (session == null) return;
+    if (pushToken.isEmpty || pushToken == _syncedPushToken) {
+      return;
+    }
+
+    await api.updateFcmToken(
+      accessToken: session!.accessToken,
+      fcmToken: pushToken,
+    );
+    _syncedPushToken = pushToken;
+  }
+
+  Future<void> _initializePushMessaging() async {
+    final options = _FirebaseRuntimeOptions.currentPlatform;
+    if (options == null) {
+      return;
+    }
+
+    try {
+      if (Firebase.apps.isEmpty) {
+        await Firebase.initializeApp(options: options);
+      }
+
+      final messaging = FirebaseMessaging.instance;
+      final permission = await messaging.requestPermission(
+        alert: true,
+        badge: true,
+        sound: true,
+        provisional: false,
+      );
+      if (permission.authorizationStatus == AuthorizationStatus.denied) {
+        return;
+      }
+
+      final token = await messaging.getToken();
+      if (token != null && token.isNotEmpty) {
+        _devicePushToken = token;
+      }
+
+      _pushTokenRefreshSubscription = messaging.onTokenRefresh.listen((token) {
+        _devicePushToken = token;
+        _syncedPushToken = null;
+        unawaited(_syncConfiguredPushToken());
+      });
+
+      _foregroundMessageSubscription = FirebaseMessaging.onMessage.listen((message) {
+        final notification = message.notification;
+        if (notification != null) {
+          onForegroundPushMessage?.call(
+            notification.title ?? 'New update',
+            notification.body ?? '',
+          );
+        }
+
+        if (session != null) {
+          unawaited(refreshAuthenticatedData());
+        }
+      });
+    } catch (error) {
+      debugPrint('Firebase push initialization skipped: $error');
+    }
+  }
+
+  @override
+  void dispose() {
+    _pushTokenRefreshSubscription?.cancel();
+    _foregroundMessageSubscription?.cancel();
+    super.dispose();
   }
 
   _ServiceData _mapService(ApiService service) {
@@ -811,7 +984,8 @@ class _AuthSheetState extends State<_AuthSheet> {
   }
 }
 
-void main() {
+Future<void> main() async {
+  WidgetsFlutterBinding.ensureInitialized();
   runApp(const KaziApp());
 }
 
@@ -824,17 +998,27 @@ class KaziApp extends StatefulWidget {
 
 class _KaziAppState extends State<KaziApp> {
   late final _KaziController _controller;
+  final GlobalKey<ScaffoldMessengerState> _scaffoldMessengerKey = GlobalKey<ScaffoldMessengerState>();
 
   @override
   void initState() {
     super.initState();
     _controller = _KaziController();
+    _controller.onForegroundPushMessage = _showForegroundPushMessage;
   }
 
   @override
   void dispose() {
+    _controller.onForegroundPushMessage = null;
     _controller.dispose();
     super.dispose();
+  }
+
+  void _showForegroundPushMessage(String title, String body) {
+    final message = body.isEmpty ? title : '$title\n$body';
+    _scaffoldMessengerKey.currentState?.showSnackBar(
+      SnackBar(content: Text(message)),
+    );
   }
 
   @override
@@ -844,6 +1028,7 @@ class _KaziAppState extends State<KaziApp> {
       child: MaterialApp(
         title: 'KAZI',
         debugShowCheckedModeBanner: false,
+        scaffoldMessengerKey: _scaffoldMessengerKey,
         theme: KaziTheme.light(),
         home: const KaziShell(),
       ),
@@ -889,8 +1074,8 @@ class _KaziShellState extends State<KaziShell> {
                 Text(_destinations[_selectedIndex].label),
                 Text(
                   isTablet
-                      ? 'Adaptive tablet workspace for customer and provider ops'
-                      : 'Mobile-first workflow for bookings and payouts',
+                      ? 'Johannesburg bookings, provider updates, and wallet activity'
+                      : 'Fast booking flow for customers and providers',
                   style: Theme.of(context).textTheme.bodySmall,
                 ),
               ],
@@ -1304,11 +1489,11 @@ class _CustomerHomePageState extends State<_CustomerHomePage> {
         children: [
           _AdaptiveSplit(
             primary: _HeroCard(
-              title: 'Book a verified pro with a real customer flow, not just a demo shell.',
+              title: 'Book a verified pro in Johannesburg with fast, clear service flow.',
               body:
-                  'Search services, filter by category, and launch a responsive booking sheet that stays usable on phones and expands cleanly on tablets.',
-              primaryLabel: 'Book instant service',
-              secondaryLabel: 'Plan for later',
+                  'Choose a category, request help now or schedule ahead, and keep every booking update, message, and payment in one place.',
+              primaryLabel: 'Book now',
+              secondaryLabel: 'Schedule service',
               onPrimaryPressed: services.isEmpty ? () {} : () => _openBookingSheet(services.first),
               onSecondaryPressed: services.isEmpty ? () {} : () => _openBookingSheet(services.first, scheduledDefault: true),
             ),
@@ -1316,9 +1501,9 @@ class _CustomerHomePageState extends State<_CustomerHomePage> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  const Text('Customer state', style: TextStyle(fontSize: 18, fontWeight: FontWeight.w700)),
+                  const Text('Booking state', style: TextStyle(fontSize: 18, fontWeight: FontWeight.w700)),
                   const SizedBox(height: 14),
-                  _InlineStatus(label: 'API target', value: controller.apiBaseUrl),
+                  const _InlineStatus(label: 'Coverage', value: 'Johannesburg, Sandton, Midrand and surrounds'),
                   const SizedBox(height: 10),
                   _InlineStatus(label: 'Signed in as', value: controller.currentUser?.role ?? 'Guest'),
                   const SizedBox(height: 10),
@@ -1419,6 +1604,13 @@ class _BookingsPageState extends State<_BookingsPage> {
 
     try {
       final call = await controller.startBookingCall(booking.id);
+      if (call.callMode == 'twilio_bridge') {
+        if (!mounted) return;
+        messenger.showSnackBar(SnackBar(content: Text(call.statusMessage)));
+        await controller.refreshAuthenticatedData();
+        return;
+      }
+
       final launched = await launchUrl(Uri.parse('tel:${call.participantPhone}'));
       if (!launched) {
         throw const KaziApiException('Could not open the phone dialer on this device.');
@@ -2399,7 +2591,7 @@ class _NotificationsSheet extends StatelessWidget {
             Flexible(
               child: notifications.isEmpty
                   ? const _SurfaceCard(
-                      child: Text('Notifications from bookings and service progress will appear here.'),
+                      child: Text('Booking updates, provider movement, chat alerts, and payment confirmations will appear here.'),
                     )
                   : ListView.separated(
                       shrinkWrap: true,
@@ -2600,9 +2792,9 @@ class _BookingWorkflowCard extends StatelessWidget {
           const SizedBox(height: 10),
           _InlineStatus(label: 'Schedule', value: booking.schedule),
           const SizedBox(height: 10),
-          _InlineStatus(label: 'Payment', value: booking.paymentMethod),
+          _InlineStatus(label: 'Payment', value: booking.paymentMethodLabel),
           const SizedBox(height: 10),
-          _InlineStatus(label: 'Payment status', value: booking.paymentStatus),
+          _InlineStatus(label: 'Payment status', value: booking.paymentStatusLabel),
           const SizedBox(height: 10),
           _InlineStatus(label: 'Amount', value: booking.amount),
           if (booking.supportsLiveTracking) ...[
@@ -2675,6 +2867,7 @@ class _BookingChatSheet extends StatefulWidget {
 class _BookingChatSheetState extends State<_BookingChatSheet> {
   final TextEditingController _messageController = TextEditingController();
   ApiChatThread? _thread;
+  ApiBookingCall? _lastCall;
   bool _loading = true;
   bool _sending = false;
   String? _error;
@@ -2754,6 +2947,15 @@ class _BookingChatSheetState extends State<_BookingChatSheet> {
     final controller = _AppScope.of(context);
     try {
       final call = await controller.startBookingCall(widget.booking.id);
+      if (!mounted) return;
+      setState(() => _lastCall = call);
+
+      if (call.callMode == 'twilio_bridge') {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(call.statusMessage)));
+        await _loadThread();
+        return;
+      }
+
       final launched = await launchUrl(Uri.parse('tel:${call.participantPhone}'));
       if (!launched) {
         throw const KaziApiException('Could not open the phone dialer on this device.');
@@ -2799,11 +3001,48 @@ class _BookingChatSheetState extends State<_BookingChatSheet> {
                           ),
                         ],
                       ),
+                      if (_lastCall != null) ...[
+                        const SizedBox(height: 12),
+                        _SurfaceCard(
+                          backgroundColor: _lastCall!.callMode == 'twilio_bridge'
+                              ? const Color(0xFFEAF5EE)
+                              : const Color(0xFFFFF4D6),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Row(
+                                children: [
+                                  Text(
+                                    _lastCall!.callMode == 'twilio_bridge' ? 'Call in progress' : 'Dialer fallback ready',
+                                    style: const TextStyle(fontWeight: FontWeight.w800),
+                                  ),
+                                  const Spacer(),
+                                  Text(_formatMessageTime(_lastCall!.startedAt)),
+                                ],
+                              ),
+                              const SizedBox(height: 6),
+                              Text(_lastCall!.statusMessage),
+                              const SizedBox(height: 10),
+                              Wrap(
+                                spacing: 12,
+                                runSpacing: 8,
+                                children: [
+                                  _InlineStatus(
+                                    label: 'Route',
+                                    value: _lastCall!.callProvider == 'twilio' ? 'Twilio bridge' : 'Device dialer',
+                                  ),
+                                  _InlineStatus(label: 'State', value: _lastCall!.callStatus.replaceAll('_', ' ')),
+                                ],
+                              ),
+                            ],
+                          ),
+                        ),
+                      ],
                       const SizedBox(height: 16),
                       Flexible(
                         child: _thread!.messages.isEmpty
                             ? const _SurfaceCard(
-                                child: Text('Start the conversation with booking updates or arrival instructions.'),
+                                child: Text('Share arrival notes, gate instructions, or service updates for this booking.'),
                               )
                             : ListView.separated(
                                 shrinkWrap: true,
@@ -3237,6 +3476,10 @@ class _BookingData {
       status == _BookingStatus.matched || status == _BookingStatus.enRoute;
 
   bool get hasLiveTracking => providerCurrentLat != null && providerCurrentLng != null;
+
+    String get paymentMethodLabel => _formatPaymentMethodLabel(paymentMethod);
+
+    String get paymentStatusLabel => _formatPaymentStatusLabel(paymentStatus);
 
   String get trackingSummary {
     if (!supportsLiveTracking) {

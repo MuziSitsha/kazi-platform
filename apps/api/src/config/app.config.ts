@@ -25,6 +25,7 @@ export default registerAs('app', () => ({
   // Twilio (in-app calling)
   twilioAccountSid: process.env.TWILIO_ACCOUNT_SID,
   twilioAuthToken: process.env.TWILIO_AUTH_TOKEN,
+  twilioPhoneNumber: process.env.TWILIO_PHONE_NUMBER,
   // AWS S3 (document and media storage)
   awsRegion: process.env.AWS_REGION || 'af-south-1',
   awsAccessKeyId: process.env.AWS_ACCESS_KEY_ID,
