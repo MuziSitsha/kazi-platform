@@ -2,18 +2,6 @@ name: Deploy KAZI API to AWS
 
 on:
   workflow_dispatch:
-  push:
-    branches: [main]
-    paths:
-      - 'apps/api/src/**'
-      - 'apps/api/Dockerfile'
-      - 'apps/api/package.json'
-      - 'apps/api/tsconfig*.json'
-      - 'apps/api/nest-cli.json'
-      - '.github/workflows/deploy-aws.yml'
-      - 'infra/aws/**'
-      - 'package.json'
-      - 'yarn.lock'
 
 permissions:
   contents: read

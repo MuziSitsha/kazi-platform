@@ -2,18 +2,6 @@ name: Deploy KAZI Admin to AWS
 
 on:
   workflow_dispatch:
-  push:
-    branches: [main]
-    paths:
-      - 'apps/admin/src/**'
-      - 'apps/admin/public/**'
-      - 'apps/admin/index.html'
-      - 'apps/admin/package.json'
-      - 'apps/admin/tsconfig*.json'
-      - 'apps/admin/vite.config.*'
-      - '.github/workflows/deploy-admin.yml'
-      - 'package.json'
-      - 'yarn.lock'
 
 permissions:
   contents: read
