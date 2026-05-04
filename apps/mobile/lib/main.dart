@@ -2218,7 +2218,7 @@ class _CustomerHomePageState extends State<_CustomerHomePage> {
             ),
             const SizedBox(height: 14),
             SizedBox(
-              height: 300,
+              height: 336,
               child: PageView.builder(
                 controller: _featuredServicesController,
                 itemCount: featuredServices.length,

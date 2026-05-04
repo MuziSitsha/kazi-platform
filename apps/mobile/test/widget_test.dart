@@ -8,6 +8,6 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text('Home'), findsWidgets);
-    expect(find.text('Browse services'), findsOneWidget);
+    expect(find.text('Browse all services'), findsOneWidget);
   });
 }

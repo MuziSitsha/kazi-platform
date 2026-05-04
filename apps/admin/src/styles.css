@@ -282,6 +282,41 @@ body {
   gap: 14px;
 }
 
+.settingsGroup {
+  display: grid;
+  gap: 14px;
+  padding: 18px;
+  border-radius: 22px;
+  border: 1px solid rgba(17, 17, 17, 0.08);
+  background: rgba(255, 255, 255, 0.84);
+}
+
+.settingsGroup h3 {
+  margin: 0;
+}
+
+.settingsGroupHeader {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 12px;
+}
+
+.settingsGrid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 14px;
+}
+
+.fullWidthField {
+  grid-column: 1 / -1;
+}
+
+.fieldHint {
+  margin: 0;
+  color: var(--kazi-color-muted-text);
+}
+
 label {
   display: grid;
   gap: 8px;
@@ -520,6 +555,11 @@ textarea {
   color: #7f5b00;
 }
 
+.statusPill.approved {
+  background: rgba(0, 107, 60, 0.12);
+  color: #00572f;
+}
+
 .actionRow {
   justify-content: flex-end;
   margin-top: 14px;
@@ -538,6 +578,7 @@ textarea {
   }
 
   .sectionHeader,
+  .settingsGroupHeader,
   .providerHeader,
   .documentRow,
   .actionRow,
@@ -546,6 +587,10 @@ textarea {
   }
 
   .metricsGrid {
+    grid-template-columns: 1fr;
+  }
+
+  .settingsGrid {
     grid-template-columns: 1fr;
   }
 

@@ -7,6 +7,13 @@ type PlatformSettings = {
   walletPaymentsEnabled: boolean;
   instantBookingsEnabled: boolean;
   scheduledBookingsEnabled: boolean;
+  businessLegalName?: string;
+  payoutBankName?: string;
+  payoutAccountHolder?: string;
+  payoutAccountNumber?: string;
+  payoutAccountType?: string;
+  payoutBranchCode?: string;
+  payoutReference?: string;
 };
 
 type ProviderDocument = {
@@ -97,6 +104,15 @@ export function App() {
   const [statusMessage, setStatusMessage] = useState('');
   const [errorMessage, setErrorMessage] = useState('');
   const [showDeveloperSettings, setShowDeveloperSettings] = useState(false);
+
+  const payoutProfileReady = Boolean(
+    settings?.businessLegalName?.trim()
+      && settings.payoutBankName?.trim()
+      && settings.payoutAccountHolder?.trim()
+      && settings.payoutAccountNumber?.trim()
+      && settings.payoutAccountType?.trim()
+      && settings.payoutBranchCode?.trim(),
+  );
 
   function formatCurrency(cents: number) {
     return new Intl.NumberFormat('en-ZA', {
@@ -393,7 +409,7 @@ export function App() {
           <div className="sectionHeader">
             <div>
               <p className="eyebrow compact">Platform Settings</p>
-              <h2>Commission and booking controls</h2>
+              <h2>Commission, bookings, and payout controls</h2>
             </div>
             <button type="button" className="primaryButton" onClick={saveSettings} disabled={!settings || savingSettings}>
               {savingSettings ? 'Saving...' : 'Save Settings'}
@@ -402,62 +418,154 @@ export function App() {
 
           {settings ? (
             <div className="settingsForm">
-              <label>
-                Default Commission Rate
-                <input
-                  type="number"
-                  step="0.01"
-                  min="0"
-                  max="0.5"
-                  value={settings.defaultCommissionRate}
-                  onChange={(event) => setSettings({ ...settings, defaultCommissionRate: Number(event.target.value) })}
-                />
-              </label>
+              <div className="settingsGroup">
+                <div>
+                  <p className="eyebrow compact">Marketplace Policy</p>
+                  <h3>Booking and payment rails</h3>
+                </div>
 
-              <label className="toggleRow">
-                <input
-                  type="checkbox"
-                  checked={settings.cashPaymentsEnabled}
-                  onChange={(event) => setSettings({ ...settings, cashPaymentsEnabled: event.target.checked })}
-                />
-                Cash payments enabled
-              </label>
+                <label>
+                  Default Commission Rate
+                  <input
+                    type="number"
+                    step="0.01"
+                    min="0"
+                    max="0.5"
+                    value={settings.defaultCommissionRate}
+                    onChange={(event) => setSettings({ ...settings, defaultCommissionRate: Number(event.target.value) })}
+                  />
+                </label>
 
-              <label className="toggleRow">
-                <input
-                  type="checkbox"
-                  checked={settings.cardPaymentsEnabled}
-                  onChange={(event) => setSettings({ ...settings, cardPaymentsEnabled: event.target.checked })}
-                />
-                Card payments enabled
-              </label>
+                <label className="toggleRow">
+                  <input
+                    type="checkbox"
+                    checked={settings.cashPaymentsEnabled}
+                    onChange={(event) => setSettings({ ...settings, cashPaymentsEnabled: event.target.checked })}
+                  />
+                  Cash payments enabled
+                </label>
 
-              <label className="toggleRow">
-                <input
-                  type="checkbox"
-                  checked={settings.walletPaymentsEnabled}
-                  onChange={(event) => setSettings({ ...settings, walletPaymentsEnabled: event.target.checked })}
-                />
-                Wallet payments enabled
-              </label>
+                <label className="toggleRow">
+                  <input
+                    type="checkbox"
+                    checked={settings.cardPaymentsEnabled}
+                    onChange={(event) => setSettings({ ...settings, cardPaymentsEnabled: event.target.checked })}
+                  />
+                  Card payments enabled
+                </label>
 
-              <label className="toggleRow">
-                <input
-                  type="checkbox"
-                  checked={settings.instantBookingsEnabled}
-                  onChange={(event) => setSettings({ ...settings, instantBookingsEnabled: event.target.checked })}
-                />
-                Instant bookings enabled
-              </label>
+                <label className="toggleRow">
+                  <input
+                    type="checkbox"
+                    checked={settings.walletPaymentsEnabled}
+                    onChange={(event) => setSettings({ ...settings, walletPaymentsEnabled: event.target.checked })}
+                  />
+                  Wallet payments enabled
+                </label>
 
-              <label className="toggleRow">
-                <input
-                  type="checkbox"
-                  checked={settings.scheduledBookingsEnabled}
-                  onChange={(event) => setSettings({ ...settings, scheduledBookingsEnabled: event.target.checked })}
-                />
-                Scheduled bookings enabled
-              </label>
+                <label className="toggleRow">
+                  <input
+                    type="checkbox"
+                    checked={settings.instantBookingsEnabled}
+                    onChange={(event) => setSettings({ ...settings, instantBookingsEnabled: event.target.checked })}
+                  />
+                  Instant bookings enabled
+                </label>
+
+                <label className="toggleRow">
+                  <input
+                    type="checkbox"
+                    checked={settings.scheduledBookingsEnabled}
+                    onChange={(event) => setSettings({ ...settings, scheduledBookingsEnabled: event.target.checked })}
+                  />
+                  Scheduled bookings enabled
+                </label>
+              </div>
+
+              <div className="settingsGroup">
+                <div className="settingsGroupHeader">
+                  <div>
+                    <p className="eyebrow compact">Business Payout Profile</p>
+                    <h3>Where customer payments should land</h3>
+                  </div>
+                  <span className={`statusPill ${payoutProfileReady ? 'approved' : 'pending'}`}>
+                    {payoutProfileReady ? 'Ready for settlement setup' : 'Banking details required'}
+                  </span>
+                </div>
+
+                <p className="fieldHint">
+                  Store the business banking profile here for settlement operations. Payment gateway keys still belong in secure server environment variables.
+                </p>
+
+                <div className="settingsGrid">
+                  <label>
+                    Business Legal Name
+                    <input
+                      type="text"
+                      value={settings.businessLegalName || ''}
+                      onChange={(event) => setSettings({ ...settings, businessLegalName: event.target.value })}
+                    />
+                  </label>
+
+                  <label>
+                    Bank Name
+                    <input
+                      type="text"
+                      value={settings.payoutBankName || ''}
+                      onChange={(event) => setSettings({ ...settings, payoutBankName: event.target.value })}
+                    />
+                  </label>
+
+                  <label>
+                    Account Holder
+                    <input
+                      type="text"
+                      value={settings.payoutAccountHolder || ''}
+                      onChange={(event) => setSettings({ ...settings, payoutAccountHolder: event.target.value })}
+                    />
+                  </label>
+
+                  <label>
+                    Account Number
+                    <input
+                      type="text"
+                      inputMode="numeric"
+                      value={settings.payoutAccountNumber || ''}
+                      onChange={(event) => setSettings({ ...settings, payoutAccountNumber: event.target.value })}
+                    />
+                  </label>
+
+                  <label>
+                    Account Type
+                    <input
+                      type="text"
+                      placeholder="Business Cheque"
+                      value={settings.payoutAccountType || ''}
+                      onChange={(event) => setSettings({ ...settings, payoutAccountType: event.target.value })}
+                    />
+                  </label>
+
+                  <label>
+                    Branch Code
+                    <input
+                      type="text"
+                      inputMode="numeric"
+                      value={settings.payoutBranchCode || ''}
+                      onChange={(event) => setSettings({ ...settings, payoutBranchCode: event.target.value })}
+                    />
+                  </label>
+
+                  <label className="fullWidthField">
+                    Settlement Reference
+                    <input
+                      type="text"
+                      placeholder="KAZI settlements"
+                      value={settings.payoutReference || ''}
+                      onChange={(event) => setSettings({ ...settings, payoutReference: event.target.value })}
+                    />
+                  </label>
+                </div>
+              </div>
             </div>
           ) : (
             <p className="emptyState">Sign in as an admin to load platform settings.</p>

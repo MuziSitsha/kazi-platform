@@ -30,6 +30,27 @@ export class PlatformSettingsEntity {
   scheduledBookingsEnabled: boolean;
 
   @Column({ nullable: true })
+  businessLegalName: string;
+
+  @Column({ nullable: true })
+  payoutBankName: string;
+
+  @Column({ nullable: true })
+  payoutAccountHolder: string;
+
+  @Column({ nullable: true })
+  payoutAccountNumber: string;
+
+  @Column({ nullable: true })
+  payoutAccountType: string;
+
+  @Column({ nullable: true })
+  payoutBranchCode: string;
+
+  @Column({ nullable: true })
+  payoutReference: string;
+
+  @Column({ nullable: true })
   updatedByUserId: string;
 
   @CreateDateColumn()
