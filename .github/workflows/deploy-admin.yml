@@ -5,20 +5,28 @@ on:
   push:
     branches: [main]
     paths:
-      - 'apps/admin/**'
+      - 'apps/admin/src/**'
+      - 'apps/admin/public/**'
+      - 'apps/admin/index.html'
+      - 'apps/admin/package.json'
+      - 'apps/admin/tsconfig*.json'
+      - 'apps/admin/vite.config.*'
       - '.github/workflows/deploy-admin.yml'
       - 'package.json'
       - 'yarn.lock'
+
+permissions:
+  contents: read
 
 jobs:
   deploy-admin:
     name: Build and Deploy Admin
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
 
       - name: Setup Node.js
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v6
         with:
           node-version: '20'
           cache: 'yarn'

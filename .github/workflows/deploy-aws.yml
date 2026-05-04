@@ -5,18 +5,25 @@ on:
   push:
     branches: [main]
     paths:
-      - 'apps/api/**'
+      - 'apps/api/src/**'
+      - 'apps/api/Dockerfile'
+      - 'apps/api/package.json'
+      - 'apps/api/tsconfig*.json'
+      - 'apps/api/nest-cli.json'
       - '.github/workflows/deploy-aws.yml'
       - 'infra/aws/**'
       - 'package.json'
       - 'yarn.lock'
+
+permissions:
+  contents: read
 
 jobs:
   deploy-api:
     name: Build and Deploy API
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
 
       - name: Configure AWS credentials
         uses: aws-actions/configure-aws-credentials@v4
