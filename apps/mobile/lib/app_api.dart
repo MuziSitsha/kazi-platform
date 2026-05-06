@@ -709,13 +709,13 @@ class ApiBooking {
       status: json['status'] as String,
       paymentMethod: json['paymentMethod'] as String,
       paymentStatus: json['paymentStatus'] as String? ?? 'pending',
-      quotedPriceCents: (json['quotedPriceCents'] as num?)?.toInt() ?? 0,
-      finalPriceCents: (json['finalPriceCents'] as num?)?.toInt() ?? 0,
-      customerLat: (json['customerLat'] as num?)?.toDouble(),
-      customerLng: (json['customerLng'] as num?)?.toDouble(),
+      quotedPriceCents: _parseInt(json['quotedPriceCents']) ?? 0,
+      finalPriceCents: _parseInt(json['finalPriceCents']) ?? 0,
+      customerLat: _parseDouble(json['customerLat']),
+      customerLng: _parseDouble(json['customerLng']),
       customerAddress: json['customerAddress'] as String?,
-      providerCurrentLat: (json['providerCurrentLat'] as num?)?.toDouble(),
-      providerCurrentLng: (json['providerCurrentLng'] as num?)?.toDouble(),
+      providerCurrentLat: _parseDouble(json['providerCurrentLat']),
+      providerCurrentLng: _parseDouble(json['providerCurrentLng']),
       providerLocationUpdatedAt: _parseDate(json['providerLocationUpdatedAt']),
       isRated: json['isRated'] as bool? ?? false,
       customerHasRated: json['customerHasRated'] as bool? ?? (json['isRated'] as bool? ?? false),
@@ -723,6 +723,29 @@ class ApiBooking {
       createdAt: _parseDate(json['createdAt']),
       scheduledAt: _parseDate(json['scheduledAt']),
     );
+  }
+
+  static int? _parseInt(dynamic value) {
+    if (value is int) {
+      return value;
+    }
+    if (value is num) {
+      return value.toInt();
+    }
+    if (value is String && value.trim().isNotEmpty) {
+      return int.tryParse(value.trim()) ?? double.tryParse(value.trim())?.toInt();
+    }
+    return null;
+  }
+
+  static double? _parseDouble(dynamic value) {
+    if (value is num) {
+      return value.toDouble();
+    }
+    if (value is String && value.trim().isNotEmpty) {
+      return double.tryParse(value.trim());
+    }
+    return null;
   }
 
   static DateTime? _parseDate(dynamic value) {

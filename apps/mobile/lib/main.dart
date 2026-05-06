@@ -10,6 +10,7 @@ import 'package:flutter_map/flutter_map.dart';
 import 'package:flutter/material.dart';
 import 'package:geocoding/geocoding.dart';
 import 'package:geolocator/geolocator.dart';
+import 'package:http/http.dart' as http;
 import 'package:latlong2/latlong.dart' as latlng;
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:url_launcher/url_launcher.dart';
@@ -51,6 +52,16 @@ const _services = [
     eta: 'Next slot in 45 min',
     imageAsset: 'assets/service-images/home-cleaning.jpg',
     icon: Icons.cleaning_services_outlined,
+  ),
+  _ServiceData(
+    id: 'clean-move',
+    category: 'Cleaning',
+    title: 'Maid Service',
+    subtitle: 'Trusted maids for recurring home support, move-in resets, and one-off tidy-ups.',
+    priceFrom: 'From R349',
+    eta: 'Next team in 35 min',
+    imageAsset: 'assets/service-images/maid-service.jpg',
+    icon: Icons.home_outlined,
   ),
   _ServiceData(
     id: 'plumbing-fix',
@@ -103,6 +114,16 @@ const _services = [
     eta: 'Booked today',
     imageAsset: 'assets/service-images/furniture-cleaning.jpg',
     icon: Icons.weekend_outlined,
+  ),
+  _ServiceData(
+    id: 'spa-massage',
+    category: 'Wellness',
+    title: 'Spa and Massage',
+    subtitle: 'At-home massage, recovery sessions, and premium wellness bookings.',
+    priceFrom: 'From R699',
+    eta: 'Tonight from 19:00',
+    imageAsset: 'assets/service-images/spa-and-massage.jpg',
+    icon: Icons.spa_outlined,
   ),
   _ServiceData(
     id: 'garden-outdoor',
@@ -323,6 +344,7 @@ class _KaziController extends ChangeNotifier {
 
   final Map<String, ApiService> _liveServicesById = {};
   final Map<String, ApiServiceCategory> _categoriesById = {};
+  final Map<String, String> _bookingServiceTitleOverrides = {};
   String _rememberedIdentifier = '';
   bool _rememberIdentifier = true;
   bool _rememberSession = true;
@@ -407,6 +429,7 @@ class _KaziController extends ChangeNotifier {
     incomingJobs = const [];
     acceptedJobs = const [];
     walletHistory = List<_WalletEntryData>.of(_walletHistory);
+    _bookingServiceTitleOverrides.clear();
     _syncedPushToken = null;
     _providerTrackingPermissionRequested = false;
     await _preferences?.remove(_storedSessionKey);
@@ -653,7 +676,7 @@ class _KaziController extends ChangeNotifier {
     await refreshAuthenticatedData();
   }
 
-  Future<void> createBooking({
+  Future<_BookingData> createBooking({
     required _ServiceData service,
     required bool scheduled,
     required String customerAddress,
@@ -666,7 +689,7 @@ class _KaziController extends ChangeNotifier {
       throw const KaziApiException('Sign in as a customer to create a booking.');
     }
 
-    final liveService = _resolveLiveService(service);
+    final liveService = await _resolveLiveServiceForBooking(service);
     if (liveService == null) {
       throw const KaziApiException(
         'This service card is visible in the marketplace, but it is not connected to a live backend service yet.',
@@ -678,7 +701,7 @@ class _KaziController extends ChangeNotifier {
         : null;
     final resolvedCustomerPosition = customerPosition ?? await _tryGetCurrentPosition();
 
-    await api.createBooking(
+    final createdBooking = await api.createBooking(
       accessToken: session!.accessToken,
       serviceCategoryId: liveService.categoryId,
       serviceId: liveService.id,
@@ -693,7 +716,40 @@ class _KaziController extends ChangeNotifier {
       paymentMethod: paymentMethod.toLowerCase(),
     );
 
+    if (!_catalogStringsOverlap(
+      _normalizeCatalogValue(service.title),
+      _normalizeCatalogValue(liveService.name),
+    )) {
+      _bookingServiceTitleOverrides[createdBooking.id] = service.title;
+    }
+
     await refreshAuthenticatedData();
+    return bookings.firstWhere(
+      (booking) => booking.id == createdBooking.id,
+      orElse: () => _mapBooking(createdBooking),
+    );
+  }
+
+  Future<ApiService?> _resolveLiveServiceForBooking(_ServiceData service) async {
+    final cached = _resolveLiveService(service);
+    if (cached != null) {
+      return cached;
+    }
+
+    try {
+      final liveServices = await api.listServices();
+      if (liveServices.isEmpty) {
+        return null;
+      }
+
+      _liveServicesById
+        ..clear()
+        ..addEntries(liveServices.map((liveService) => MapEntry(liveService.id, liveService)));
+
+      return _resolveLiveService(service) ?? liveServices.first;
+    } catch (_) {
+      return null;
+    }
   }
 
   Future<Position?> resolveCurrentBookingPosition({bool requestPermissionIfNeeded = true}) {
@@ -708,10 +764,40 @@ class _KaziController extends ChangeNotifier {
     try {
       final placemarks = await placemarkFromCoordinates(position.latitude, position.longitude);
       if (placemarks.isEmpty) {
-        return null;
+        return await _reverseGeocodeAddress(position);
       }
 
       return _formatPlacemarkAddress(placemarks.first);
+    } catch (_) {
+      return _reverseGeocodeAddress(position);
+    }
+  }
+
+  Future<String?> _reverseGeocodeAddress(Position position) async {
+    try {
+      final uri = Uri.https('nominatim.openstreetmap.org', '/reverse', {
+        'format': 'jsonv2',
+        'lat': position.latitude.toString(),
+        'lon': position.longitude.toString(),
+        'zoom': '18',
+        'addressdetails': '1',
+        'accept-language': 'en',
+      });
+      final response = await http.get(
+        uri,
+        headers: const {'Accept': 'application/json'},
+      ).timeout(const Duration(seconds: 8));
+
+      if (response.statusCode >= 400 || response.body.isEmpty) {
+        return null;
+      }
+
+      final decoded = jsonDecode(response.body);
+      if (decoded is! Map<String, dynamic>) {
+        return null;
+      }
+
+      return _formatReverseGeocodedAddress(decoded);
     } catch (_) {
       return null;
     }
@@ -1156,12 +1242,20 @@ class _KaziController extends ChangeNotifier {
       return categoryMatches.first;
     }
 
+    if (categoryMatches.isNotEmpty) {
+      return categoryMatches.first;
+    }
+
+    if (_liveServicesById.isNotEmpty) {
+      return _liveServicesById.values.first;
+    }
+
     return null;
   }
 
   _BookingData _mapBooking(ApiBooking booking) {
     final liveService = _liveServicesById[booking.serviceId];
-    final title = liveService?.name ?? 'Service booking';
+    final title = _bookingServiceTitleOverrides[booking.id] ?? liveService?.name ?? 'Service booking';
     return _BookingData(
       id: booking.id,
       serviceTitle: title,
@@ -1982,6 +2076,7 @@ class _CustomerHomePageState extends State<_CustomerHomePage> {
     final controller = _AppScope.of(context);
     final navigator = Navigator.of(context);
     final messenger = ScaffoldMessenger.of(context);
+    final pageContext = context;
 
     if (!controller.isCustomer) {
       await _showAuthSheet(context, initialRole: 'customer');
@@ -1995,12 +2090,14 @@ class _CustomerHomePageState extends State<_CustomerHomePage> {
     final promoController = TextEditingController();
     var bookingPosition = await controller.resolveCurrentBookingPosition();
     var usingCurrentLocation = bookingPosition != null;
+    String? currentLocationLabel;
     if (bookingPosition != null) {
       final detectedAddress = await controller.resolveCurrentBookingAddress(bookingPosition);
       if (!mounted) {
         return;
       }
-      addressController.text = detectedAddress ?? _formatPinnedLocationLabel(bookingPosition);
+      currentLocationLabel = detectedAddress ?? _formatPinnedLocationLabel(bookingPosition);
+      addressController.text = currentLocationLabel;
     }
     if (!mounted) {
       return;
@@ -2081,14 +2178,48 @@ class _CustomerHomePageState extends State<_CustomerHomePage> {
                           ),
                           if (bookingPosition != null) ...[
                             const SizedBox(height: 6),
-                            Builder(
-                              builder: (context) {
-                                final pinnedPosition = bookingPosition!;
-                                return Text(
-                                  '${pinnedPosition.latitude.toStringAsFixed(5)}, ${pinnedPosition.longitude.toStringAsFixed(5)}',
-                                  style: const TextStyle(fontWeight: FontWeight.w600),
-                                );
-                              },
+                            Text(
+                              currentLocationLabel ?? 'Current location pinned',
+                              style: const TextStyle(fontWeight: FontWeight.w600),
+                            ),
+                            const SizedBox(height: 12),
+                            ClipRRect(
+                              borderRadius: BorderRadius.circular(16),
+                              child: SizedBox(
+                                height: 170,
+                                child: FlutterMap(
+                                  options: MapOptions(
+                                    initialCenter: latlng.LatLng(
+                                      bookingPosition!.latitude,
+                                      bookingPosition!.longitude,
+                                    ),
+                                    initialZoom: 15.4,
+                                  ),
+                                  children: [
+                                    TileLayer(
+                                      urlTemplate: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
+                                      userAgentPackageName: 'com.kazi.mobile',
+                                    ),
+                                    MarkerLayer(
+                                      markers: [
+                                        Marker(
+                                          point: latlng.LatLng(
+                                            bookingPosition!.latitude,
+                                            bookingPosition!.longitude,
+                                          ),
+                                          width: 48,
+                                          height: 48,
+                                          child: const _TrackingMarker(
+                                            icon: Icons.my_location,
+                                            backgroundColor: Color(0xFFFAF1D7),
+                                            iconColor: Color(0xFF8A5A00),
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                  ],
+                                ),
+                              ),
                             ),
                           ],
                           const SizedBox(height: 10),
@@ -2106,9 +2237,11 @@ class _CustomerHomePageState extends State<_CustomerHomePage> {
                                     setModalState(() {
                                       bookingPosition = resolvedPosition;
                                       usingCurrentLocation = resolvedPosition != null;
+                                      currentLocationLabel = resolvedPosition == null
+                                          ? null
+                                          : (resolvedAddress ?? _formatPinnedLocationLabel(resolvedPosition));
                                       if (resolvedPosition != null) {
-                                        addressController.text =
-                                            resolvedAddress ?? _formatPinnedLocationLabel(resolvedPosition);
+                                        addressController.text = currentLocationLabel!;
                                         addressController.selection = TextSelection.fromPosition(
                                           TextPosition(offset: addressController.text.length),
                                         );
@@ -2203,7 +2336,7 @@ class _CustomerHomePageState extends State<_CustomerHomePage> {
                                   );
                                 }
 
-                                await controller.createBooking(
+                                final createdBooking = await controller.createBooking(
                                   service: service,
                                   scheduled: scheduled,
                                   customerAddress: trimmedAddress.isEmpty && bookingPositionForSubmit != null
@@ -2217,13 +2350,23 @@ class _CustomerHomePageState extends State<_CustomerHomePage> {
 
                                 if (!mounted) return;
                                 navigator.pop();
-                                messenger.showSnackBar(
-                                  SnackBar(
-                                    content: Text(
-                                      '${service.title} requested for ${scheduled ? 'tomorrow' : 'immediate dispatch'} via $paymentMethod.',
+                                if (scheduled) {
+                                  messenger.showSnackBar(
+                                    SnackBar(
+                                      content: Text(
+                                        '${service.title} scheduled for tomorrow via $paymentMethod.',
+                                      ),
                                     ),
-                                  ),
-                                );
+                                  );
+                                } else {
+                                  if (!pageContext.mounted) return;
+                                  await showModalBottomSheet<void>(
+                                    context: pageContext,
+                                    isScrollControlled: true,
+                                    showDragHandle: true,
+                                    builder: (_) => _DispatchSearchSheet(booking: createdBooking),
+                                  );
+                                }
                               } catch (err) {
                                 setModalState(() => error = err.toString());
                               } finally {
@@ -5486,6 +5629,56 @@ class _BookingWorkflowCard extends StatelessWidget {
   }
 }
 
+class _DispatchSearchSheet extends StatelessWidget {
+  const _DispatchSearchSheet({required this.booking});
+
+  final _BookingData booking;
+
+  @override
+  Widget build(BuildContext context) {
+    return SafeArea(
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(20, 12, 20, 20),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Text(
+              'Looking for a provider nearby',
+              style: TextStyle(fontSize: 24, fontWeight: FontWeight.w800),
+            ),
+            const SizedBox(height: 10),
+            Text(
+              'We pinned your location and started searching the nearest available providers for ${booking.serviceTitle.toLowerCase()}.',
+              style: const TextStyle(height: 1.45),
+            ),
+            const SizedBox(height: 18),
+            _BookingTrackingMapCard(booking: booking),
+            const SizedBox(height: 14),
+            const LinearProgressIndicator(
+              color: KaziTheme.primaryGreen,
+              backgroundColor: KaziTheme.surface,
+            ),
+            const SizedBox(height: 12),
+            Text(
+              'This booking will keep updating in the Bookings tab as soon as a provider accepts it.',
+              style: TextStyle(color: Colors.grey.shade700),
+            ),
+            const SizedBox(height: 18),
+            SizedBox(
+              width: double.infinity,
+              child: FilledButton(
+                onPressed: () => Navigator.of(context).pop(),
+                child: const Text('Keep watching'),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
 class _BookingChatSheet extends StatefulWidget {
   const _BookingChatSheet({required this.booking});
 
@@ -6238,6 +6431,9 @@ class _BookingData {
 
   bool get hasPinnedCustomerLocation => customerLat != null && customerLng != null;
 
+    bool get isSearchingForProvider =>
+      status == _BookingStatus.requested && hasPinnedCustomerLocation && !hasLiveTracking;
+
   bool get hasMapPreview => hasPinnedCustomerLocation || hasLiveTracking;
 
   String get paymentMethodLabel => _formatPaymentMethodLabel(paymentMethod);
@@ -6245,6 +6441,9 @@ class _BookingData {
   String get paymentStatusLabel => _formatPaymentStatusLabel(paymentStatus);
 
   String get trackingSummary {
+    if (isSearchingForProvider) {
+      return 'Looking for nearby providers around your pin';
+    }
     if (!supportsLiveTracking) {
       return 'Tracking available after provider assignment';
     }
@@ -6304,9 +6503,13 @@ class _BookingTrackingMapCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final searchCandidates = booking.isSearchingForProvider
+        ? _buildSearchCandidatePoints(booking)
+        : const <latlng.LatLng>[];
     final points = <latlng.LatLng>[
       if (booking.hasPinnedCustomerLocation) latlng.LatLng(booking.customerLat!, booking.customerLng!),
       if (booking.hasLiveTracking) latlng.LatLng(booking.providerCurrentLat!, booking.providerCurrentLng!),
+      ...searchCandidates,
     ];
 
     if (points.isEmpty) {
@@ -6318,7 +6521,9 @@ class _BookingTrackingMapCard extends StatelessWidget {
       points.map((point) => point.longitude).reduce((total, value) => total + value) / points.length,
     );
 
-    final distanceLabel = booking.hasPinnedCustomerLocation && booking.hasLiveTracking
+    final distanceLabel = booking.isSearchingForProvider
+      ? 'Looking for a provider nearby'
+      : booking.hasPinnedCustomerLocation && booking.hasLiveTracking
         ? _formatDistanceMeters(
             Geolocator.distanceBetween(
               booking.customerLat!,
@@ -6328,8 +6533,8 @@ class _BookingTrackingMapCard extends StatelessWidget {
             ),
           )
         : booking.hasPinnedCustomerLocation
-            ? 'Customer pin confirmed'
-            : 'Provider live position';
+          ? 'Customer pin confirmed'
+          : 'Provider live position';
 
     return Container(
       decoration: BoxDecoration(
@@ -6343,7 +6548,11 @@ class _BookingTrackingMapCard extends StatelessWidget {
         children: [
           Row(
             children: [
-              const Icon(Icons.route_outlined, size: 18, color: Color(0xFF1A231D)),
+              Icon(
+                booking.isSearchingForProvider ? Icons.radar_outlined : Icons.route_outlined,
+                size: 18,
+                color: const Color(0xFF1A231D),
+              ),
               const SizedBox(width: 8),
               Expanded(
                 child: Text(
@@ -6391,6 +6600,19 @@ class _BookingTrackingMapCard extends StatelessWidget {
                             iconColor: Color(0xFF8A5A00),
                           ),
                         ),
+                      if (booking.isSearchingForProvider)
+                        ...searchCandidates.map(
+                          (candidate) => Marker(
+                            point: candidate,
+                            width: 40,
+                            height: 40,
+                            child: const _TrackingMarker(
+                              icon: Icons.local_taxi_outlined,
+                              backgroundColor: Color(0xFFDBF3E2),
+                              iconColor: Color(0xFF22543D),
+                            ),
+                          ),
+                        ),
                       if (booking.hasLiveTracking)
                         Marker(
                           point: latlng.LatLng(booking.providerCurrentLat!, booking.providerCurrentLng!),
@@ -6415,7 +6637,9 @@ class _BookingTrackingMapCard extends StatelessWidget {
           ),
           const SizedBox(height: 10),
           Text(
-            booking.hasLiveTracking
+            booking.isSearchingForProvider
+              ? 'Your pin is locked in. We are scanning nearby providers around your location and will update this card as soon as one accepts.'
+              : booking.hasLiveTracking
                 ? 'The provider marker updates while the provider keeps the app open on the way to the job.'
                 : 'The customer location is already pinned. The provider marker appears as soon as live sharing starts.',
             style: TextStyle(color: Colors.grey.shade700),
@@ -6424,6 +6648,28 @@ class _BookingTrackingMapCard extends StatelessWidget {
       ),
     );
   }
+}
+
+List<latlng.LatLng> _buildSearchCandidatePoints(_BookingData booking) {
+  if (!booking.hasPinnedCustomerLocation) {
+    return const [];
+  }
+
+  final origin = latlng.LatLng(booking.customerLat!, booking.customerLng!);
+  final seed = booking.id.runes.fold<int>(0, (total, value) => total + value);
+
+  return List<latlng.LatLng>.generate(3, (index) {
+    final angle = ((seed + (index * 97)) % 360) * (math.pi / 180);
+    final radiusMeters = 320 + (index * 210);
+    return _offsetLatLng(origin, angle, radiusMeters.toDouble());
+  });
+}
+
+latlng.LatLng _offsetLatLng(latlng.LatLng origin, double angleRadians, double radiusMeters) {
+  final latitudeOffset = (radiusMeters / 111320) * math.cos(angleRadians);
+  final longitudeScale = math.max(math.cos(origin.latitude * math.pi / 180).abs(), 0.2);
+  final longitudeOffset = (radiusMeters / (111320 * longitudeScale)) * math.sin(angleRadians);
+  return latlng.LatLng(origin.latitude + latitudeOffset, origin.longitude + longitudeOffset);
 }
 
 class _TrackingMarker extends StatelessWidget {
@@ -6460,7 +6706,7 @@ String _formatDistanceMeters(double distanceMeters) {
 }
 
 String _formatPinnedLocationLabel(Position position) {
-  return 'Current location (${position.latitude.toStringAsFixed(5)}, ${position.longitude.toStringAsFixed(5)})';
+  return 'Current location';
 }
 
 String _formatPlacemarkAddress(Placemark placemark) {
@@ -6476,6 +6722,39 @@ String _formatPlacemarkAddress(Placemark placemark) {
   }
 
   return parts.toSet().join(', ');
+}
+
+String? _formatReverseGeocodedAddress(Map<String, dynamic> decoded) {
+  final address = decoded['address'];
+  if (address is Map<String, dynamic>) {
+    final parts = <String>[
+      for (final key in const [
+        'road',
+        'suburb',
+        'neighbourhood',
+        'city',
+        'town',
+        'village',
+        'state',
+      ])
+        if ((address[key] as String?)?.trim().isNotEmpty == true) (address[key] as String).trim(),
+    ];
+    if (parts.isNotEmpty) {
+      return parts.toSet().join(', ');
+    }
+  }
+
+  final displayName = decoded['display_name'];
+  if (displayName is String && displayName.trim().isNotEmpty) {
+    return displayName
+        .split(',')
+        .map((part) => part.trim())
+        .where((part) => part.isNotEmpty)
+        .take(4)
+        .join(', ');
+  }
+
+  return null;
 }
 
 class _NotificationData {
