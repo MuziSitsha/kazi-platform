@@ -2601,9 +2601,9 @@ class _JustlifeInspiredHero extends StatelessWidget {
     }
 
     Widget buildVisualPanel() {
-      return Column(
+      return const Column(
         crossAxisAlignment: CrossAxisAlignment.start,
-        children: const [
+        children: [
           Row(
             children: [
               _HeroBadge(icon: Icons.star_rounded, label: 'Top rated'),
@@ -2707,9 +2707,9 @@ class _HeroVisualPanel extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Column(
+    return const Column(
       crossAxisAlignment: CrossAxisAlignment.start,
-      children: const [
+      children: [
         Row(
           children: [
             _HeroBadge(icon: Icons.star_rounded, label: 'Top rated'),
@@ -2879,24 +2879,26 @@ class _HeroSunburstState extends State<_HeroSunburst> with SingleTickerProviderS
                   ),
                 ),
               ),
-            Container(
-              width: 72,
-              height: 72,
+            const DecoratedBox(
               decoration: BoxDecoration(
                 shape: BoxShape.circle,
-                gradient: const RadialGradient(
+                gradient: RadialGradient(
                   colors: [
                     Color(0xFFFFF0B6),
                     Color(0xFFFFC83D),
                   ],
                 ),
-                boxShadow: const [
+                boxShadow: [
                   BoxShadow(
                     color: Color(0x44FFB81C),
                     blurRadius: 18,
                     offset: Offset(0, 6),
                   ),
                 ],
+              ),
+              child: SizedBox(
+                width: 72,
+                height: 72,
               ),
             ),
           ],
@@ -2963,6 +2965,7 @@ class _CenterHeroCard extends StatelessWidget {
   }
 }
 
+// ignore: unused_element
 class _ServiceShortcutTile extends StatelessWidget {
   const _ServiceShortcutTile({required this.data, required this.onTap});
 
@@ -3552,8 +3555,8 @@ class _OfferingCarouselVisual extends StatelessWidget {
             child: Stack(
               fit: StackFit.expand,
               children: [
-                DecoratedBox(
-                  decoration: const BoxDecoration(
+                const DecoratedBox(
+                  decoration: BoxDecoration(
                     gradient: LinearGradient(
                       begin: Alignment.topCenter,
                       end: Alignment.bottomCenter,
@@ -5199,14 +5202,14 @@ class _ServiceFlowCard extends StatelessWidget {
                   child: Stack(
                     fit: StackFit.expand,
                     children: [
-                      DecoratedBox(
+                      const DecoratedBox(
                         decoration: BoxDecoration(
                           gradient: LinearGradient(
                             begin: Alignment.topCenter,
                             end: Alignment.bottomCenter,
                             colors: [
-                              const Color(0xFFF4F1EB),
-                              const Color(0xFFE5DDD1),
+                              Color(0xFFF4F1EB),
+                              Color(0xFFE5DDD1),
                             ],
                           ),
                         ),
