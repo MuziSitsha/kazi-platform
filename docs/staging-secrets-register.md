@@ -8,11 +8,12 @@ Status values:
 - provided
 - loaded
 - validated
+- redacted
 
 ## Environment Owner
 
 - primary business email: sales@gubudo.com
-- bootstrap password provided by client: Merc1985!
+- bootstrap password: redacted from source control; store in a password manager or secret vault
 
 ## Public URLs
 
@@ -97,7 +98,7 @@ Status values:
 | Item | Value | Status | Notes |
 |------|-------|--------|-------|
 | Staging admin email | sales@gubudo.com | provided | Bootstrap admin |
-| Staging admin password | Merc1985! | provided | Rotate before production |
+| Staging admin password | redacted | redacted | Rotate out-of-band and do not commit passwords |
 | Production admin email | sales@gubudo.com | provided | Confirm before production |
 | Production admin password | pending rotation | missing | Do not reuse staging bootstrap password |
 

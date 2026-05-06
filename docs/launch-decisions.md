@@ -35,7 +35,7 @@ If operations capacity allows, the next expansion ring can include:
 ## Business Owner Account
 
 - owner email: sales@gubudo.com
-- current requested password: Merc1985!
+- bootstrap password: store out-of-band only; do not commit to the repository
 
 ## Security Note
 

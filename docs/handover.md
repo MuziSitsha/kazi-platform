@@ -26,7 +26,7 @@ The current `main` branch has passing GitHub CI and includes:
 - API Swagger docs: `http://127.0.0.1:3002/docs`
 - Admin dev server: `http://127.0.0.1:5173`
 - Mobile web build has been validated locally through Flutter web build
-- Admin login for current handover: `sales@gubudo.com` / `Merc1985!`
+- Admin login for current handover: `sales@gubudo.com` with password stored out-of-band only
 
 ## What Was Completed Before Handover
 
