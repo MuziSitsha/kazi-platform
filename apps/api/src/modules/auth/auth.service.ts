@@ -31,9 +31,10 @@ export class AuthService {
   // Step 1: Send OTP to SA mobile number
   async sendOtp(phone: string): Promise<{ message: string; expiresIn: number }> {
     const normalizedPhone = this.normalizePhone(phone);
+    const demoFixedOtp = this.configService.get<string>('DEMO_FIXED_OTP')?.trim();
 
     // Generate 6-digit OTP
-    const otpCode = Math.floor(100000 + Math.random() * 900000).toString();
+    const otpCode = demoFixedOtp || Math.floor(100000 + Math.random() * 900000).toString();
     const hashedOtp = await bcrypt.hash(otpCode, 10);
     const expiresAt = new Date(Date.now() + this.OTP_EXPIRY_MINUTES * 60 * 1000);
 
@@ -51,11 +52,13 @@ export class AuthService {
       attempts: 0,
     });
 
-    // Send via Clickatell (production) or log (development)
-    if (this.configService.get<string>('app.env') === 'production') {
+    // Send via Clickatell when SMS is configured, otherwise allow a demo OTP fallback.
+    if (this.configService.get<string>('app.env') === 'production' && !demoFixedOtp) {
       await this.sendSmsClickatell(normalizedPhone, otpCode);
     } else {
-      this.logger.debug(`[DEV] OTP for ${normalizedPhone}: ${otpCode}`);
+      this.logger.warn(
+        `[OTP FALLBACK] Using ${demoFixedOtp ? 'configured demo OTP' : 'logged OTP'} for ${normalizedPhone}: ${otpCode}`,
+      );
     }
 
     return {
