@@ -77,11 +77,39 @@ type AdminAuthResponse = {
   };
 };
 
-const DEFAULT_API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://127.0.0.1:3001/api/v1';
+const STAGING_HTTPS_API_BASE_URL = 'https://d1v0xfe0nj4abg.cloudfront.net/api/v1';
+
+function resolveDefaultApiBaseUrl() {
+  const configured = import.meta.env.VITE_API_BASE_URL;
+  if (configured) {
+    return configured;
+  }
+
+  const hostname = window.location.hostname;
+  const isLocalHost = hostname === 'localhost' || hostname === '127.0.0.1';
+  if (isLocalHost) {
+    return 'http://127.0.0.1:3001/api/v1';
+  }
+
+  return STAGING_HTTPS_API_BASE_URL;
+}
+
+const DEFAULT_API_BASE_URL = resolveDefaultApiBaseUrl();
 
 function getInitialApiBaseUrl() {
   const stored = localStorage.getItem('kazi.admin.apiBaseUrl');
-  if (!stored || stored === 'http://localhost:3001/api/v1' || stored === 'http://127.0.0.1:3001/api/v1') {
+  const onSecurePage = window.location.protocol === 'https:';
+  const hostname = window.location.hostname;
+  const isLocalHost = hostname === 'localhost' || hostname === '127.0.0.1';
+
+  if (
+    !stored
+    || stored === 'http://localhost:3001/api/v1'
+    || stored === 'http://127.0.0.1:3001/api/v1'
+    || (onSecurePage && stored.startsWith('http://'))
+    || (!isLocalHost && stored.includes('127.0.0.1'))
+    || (!isLocalHost && stored.includes('localhost'))
+  ) {
     return DEFAULT_API_BASE_URL;
   }
 
@@ -90,7 +118,7 @@ function getInitialApiBaseUrl() {
 
 export function App() {
   const [apiBaseUrl, setApiBaseUrl] = useState(getInitialApiBaseUrl);
-  const [email, setEmail] = useState(() => localStorage.getItem('kazi.admin.email') || 'sales@gubudo.com');
+  const [email, setEmail] = useState(() => localStorage.getItem('kazi.admin.email') || '');
   const [password, setPassword] = useState('');
   const [token, setToken] = useState(() => localStorage.getItem('kazi.admin.token') || '');
   const [adminIdentity, setAdminIdentity] = useState(() => localStorage.getItem('kazi.admin.identity') || '');
@@ -355,19 +383,15 @@ export function App() {
           </div>
         ) : (
           <form className="authForm" onSubmit={loginAdmin}>
-            <div className="credentialStrip">
-              <span className="credentialChip">sales@gubudo.com</span>
-              <span className="credentialChip">Merc1985!</span>
-            </div>
             <label>
               Admin email address
-              <input value={email} onChange={(event) => setEmail(event.target.value)} placeholder="sales@gubudo.com" type="email" autoComplete="username" />
+              <input value={email} onChange={(event) => setEmail(event.target.value)} placeholder="Enter your admin email" type="email" autoComplete="username" />
             </label>
             <label>
               Password
-              <input value={password} onChange={(event) => setPassword(event.target.value)} placeholder="Merc1985!" type="password" autoComplete="current-password" />
+              <input value={password} onChange={(event) => setPassword(event.target.value)} placeholder="Enter your password" type="password" autoComplete="current-password" />
             </label>
-            <p className="authHint">The admin sign-in is filled in for local testing so you can move straight into the console.</p>
+            <p className="authHint">Use your admin email and password to open the operations console.</p>
             <button type="submit" className="primaryButton" disabled={loading}>
               {loading ? 'Signing in...' : 'Sign in to Admin'}
             </button>

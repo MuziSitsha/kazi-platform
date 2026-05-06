@@ -1487,7 +1487,7 @@ class _AuthSheetState extends State<_AuthSheet> {
     super.initState();
     final controller = _AppScope.of(context, listen: false);
     _phoneController = TextEditingController(
-      text: controller.rememberedIdentifier.isNotEmpty ? controller.rememberedIdentifier : '0821234567',
+      text: controller.rememberedIdentifier,
     );
     _role = widget.initialRole;
     _rememberSession = controller.rememberSession;
@@ -1558,7 +1558,7 @@ class _AuthSheetState extends State<_AuthSheet> {
           children: [
             Text('Sign in to KAZI', style: Theme.of(context).textTheme.headlineSmall),
             const SizedBox(height: 8),
-            const Text('Local development uses the real OTP endpoints. In dev mode, the API logs the OTP code to the backend console.'),
+            const Text('Enter your South African mobile number to receive a one-time verification code and continue securely.'),
             const SizedBox(height: 20),
             TextField(
               controller: _phoneController,
@@ -2370,17 +2370,9 @@ class _CustomerHomePageState extends State<_CustomerHomePage> {
           const SizedBox(height: 16),
           LayoutBuilder(
             builder: (context, constraints) {
-              final serviceCardAspectRatio = switch (constraints.maxWidth) {
-                < 560 => 0.72,
-                < 900 => 0.84,
-                < 1280 => 0.88,
-                _ => 1.0,
-              };
-
               return _ResponsiveGrid(
                 minTileWidth: 270,
                 maxColumns: 3,
-                childAspectRatio: serviceCardAspectRatio,
                 children: services
                     .map(
                       (service) => _ServiceFlowCard(
@@ -2401,17 +2393,9 @@ class _CustomerHomePageState extends State<_CustomerHomePage> {
           const SizedBox(height: 14),
           LayoutBuilder(
             builder: (context, constraints) {
-              final trustCardAspectRatio = switch (constraints.maxWidth) {
-                < 560 => 0.84,
-                < 900 => 0.64,
-                < 1280 => 0.78,
-                _ => 0.9,
-              };
-
               return _ResponsiveGrid(
                 minTileWidth: 210,
                 maxColumns: 4,
-                childAspectRatio: trustCardAspectRatio,
                 children: trustHighlights
                     .map(
                       (entry) => _TrustFeatureCard(
@@ -2432,17 +2416,9 @@ class _CustomerHomePageState extends State<_CustomerHomePage> {
           const SizedBox(height: 14),
           LayoutBuilder(
             builder: (context, constraints) {
-              final testimonialCardAspectRatio = switch (constraints.maxWidth) {
-                < 560 => 0.92,
-                < 900 => 1.0,
-                < 1280 => 0.98,
-                _ => 1.08,
-              };
-
               return _ResponsiveGrid(
                 minTileWidth: 250,
                 maxColumns: 3,
-                childAspectRatio: testimonialCardAspectRatio,
                 children: testimonials
                     .map(
                       (entry) => _TestimonialCard(
@@ -3303,6 +3279,10 @@ class _OfferingCarouselState extends State<_OfferingCarousel> {
     return LayoutBuilder(
       builder: (context, constraints) {
         final compact = constraints.maxWidth < 760;
+        final narrowPhone = constraints.maxWidth < 430;
+        final carouselHeight = compact
+            ? (narrowPhone ? 468.0 : 446.0)
+            : 430.0;
 
         return Container(
           padding: const EdgeInsets.all(18),
@@ -3328,7 +3308,7 @@ class _OfferingCarouselState extends State<_OfferingCarousel> {
           child: Column(
             children: [
               SizedBox(
-                height: compact ? 420 : 430,
+                height: carouselHeight,
                 child: PageView.builder(
                   controller: _pageController,
                   itemCount: widget.offerings.length,
@@ -3377,24 +3357,31 @@ class _OfferingCarouselState extends State<_OfferingCarousel> {
                 ),
               ),
               const SizedBox(height: 14),
-              Row(
+              Wrap(
+                alignment: WrapAlignment.spaceBetween,
+                runAlignment: WrapAlignment.center,
+                crossAxisAlignment: WrapCrossAlignment.center,
+                spacing: 12,
+                runSpacing: 12,
                 children: [
                   _CarouselNavButton(
                     icon: Icons.west_rounded,
                     label: 'Previous',
                     onPressed: widget.offerings.length > 1 ? _goToPrevious : null,
                   ),
-                  const SizedBox(width: 12),
-                  Expanded(
+                  ConstrainedBox(
+                    constraints: const BoxConstraints(minWidth: 170, maxWidth: 260),
                     child: Column(
+                      mainAxisSize: MainAxisSize.min,
                       children: [
-                        Row(
-                          mainAxisAlignment: MainAxisAlignment.center,
+                        Wrap(
+                          alignment: WrapAlignment.center,
+                          spacing: 8,
+                          runSpacing: 8,
                           children: List.generate(
                             widget.offerings.length,
                             (index) => AnimatedContainer(
                               duration: const Duration(milliseconds: 220),
-                              margin: const EdgeInsets.symmetric(horizontal: 4),
                               width: _currentPage == index ? 30 : 10,
                               height: 10,
                               decoration: BoxDecoration(
@@ -3407,6 +3394,7 @@ class _OfferingCarouselState extends State<_OfferingCarousel> {
                         const SizedBox(height: 10),
                         Text(
                           'Offering ${_currentPage + 1} of ${widget.offerings.length}',
+                          textAlign: TextAlign.center,
                           style: const TextStyle(
                             color: Color(0xFF4F5B53),
                             fontWeight: FontWeight.w700,
@@ -3415,7 +3403,6 @@ class _OfferingCarouselState extends State<_OfferingCarousel> {
                       ],
                     ),
                   ),
-                  const SizedBox(width: 12),
                   _CarouselNavButton(
                     icon: Icons.east_rounded,
                     label: 'Next',
@@ -3439,89 +3426,108 @@ class _OfferingCarouselContent extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(22, 22, 22, 20),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final compact = constraints.maxWidth < 430;
+
+        return Padding(
+          padding: EdgeInsets.fromLTRB(compact ? 18 : 22, 22, compact ? 18 : 22, compact ? 18 : 20),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                decoration: BoxDecoration(
-                  color: const Color(0x26FFF1C9),
-                  borderRadius: BorderRadius.circular(999),
-                  border: Border.all(color: const Color(0x88FFD56F)),
-                ),
-                child: Text(
-                  offering.category,
-                  style: const TextStyle(
-                    color: Colors.white,
-                    fontWeight: FontWeight.w800,
+              Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Flexible(
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                      decoration: BoxDecoration(
+                        color: const Color(0x26FFF1C9),
+                        borderRadius: BorderRadius.circular(999),
+                        border: Border.all(color: const Color(0x88FFD56F)),
+                      ),
+                      child: Text(
+                        offering.category,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(
+                          color: Colors.white,
+                          fontWeight: FontWeight.w800,
+                        ),
+                      ),
+                    ),
                   ),
+                  const SizedBox(width: 12),
+                  Container(
+                    width: 46,
+                    height: 46,
+                    decoration: BoxDecoration(
+                      color: Colors.white.withValues(alpha: 0.92),
+                      borderRadius: BorderRadius.circular(16),
+                    ),
+                    child: Icon(offering.icon, color: KaziTheme.primaryGreen, size: 24),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 18),
+              const Text(
+                'Now rotating through KAZI favourites',
+                style: TextStyle(
+                  color: Color(0xFFFFD56F),
+                  fontWeight: FontWeight.w800,
                 ),
               ),
-              const Spacer(),
-              Container(
-                width: 46,
-                height: 46,
-                decoration: BoxDecoration(
-                  color: Colors.white.withValues(alpha: 0.92),
-                  borderRadius: BorderRadius.circular(16),
+              const SizedBox(height: 10),
+              Text(
+                offering.title,
+                maxLines: compact ? 2 : 3,
+                overflow: TextOverflow.ellipsis,
+                style: Theme.of(context).textTheme.headlineSmall?.copyWith(
+                      color: Colors.white,
+                      fontWeight: FontWeight.w900,
+                      height: 1.05,
+                    ),
+              ),
+              const SizedBox(height: 10),
+              Text(
+                offering.subtitle,
+                maxLines: compact ? 3 : 4,
+                overflow: TextOverflow.ellipsis,
+                style: const TextStyle(
+                  color: Color(0xFFE4EFE8),
+                  height: 1.55,
                 ),
-                child: Icon(offering.icon, color: KaziTheme.primaryGreen, size: 24),
+              ),
+              const SizedBox(height: 16),
+              Wrap(
+                spacing: 10,
+                runSpacing: 10,
+                children: [
+                  _OfferingStatPill(label: offering.priceFrom),
+                  _OfferingStatPill(label: offering.eta),
+                  const _OfferingStatPill(label: 'Professional finish'),
+                ],
+              ),
+              const SizedBox(height: 18),
+              SizedBox(
+                width: compact ? double.infinity : null,
+                child: FilledButton(
+                  onPressed: onBook,
+                  style: FilledButton.styleFrom(
+                    backgroundColor: KaziTheme.accentGold,
+                    foregroundColor: const Color(0xFF153527),
+                    padding: const EdgeInsets.symmetric(horizontal: 22, vertical: 18),
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
+                    textStyle: const TextStyle(fontWeight: FontWeight.w900),
+                  ),
+                  child: const Text('Book this offering'),
+                ),
               ),
             ],
           ),
-          const SizedBox(height: 18),
-          const Text(
-            'Now rotating through KAZI favourites',
-            style: TextStyle(
-              color: Color(0xFFFFD56F),
-              fontWeight: FontWeight.w800,
-            ),
-          ),
-          const SizedBox(height: 10),
-          Text(
-            offering.title,
-            style: Theme.of(context).textTheme.headlineSmall?.copyWith(
-                  color: Colors.white,
-                  fontWeight: FontWeight.w900,
-                  height: 1.05,
-                ),
-          ),
-          const SizedBox(height: 10),
-          Text(
-            offering.subtitle,
-            style: const TextStyle(
-              color: Color(0xFFE4EFE8),
-              height: 1.55,
-            ),
-          ),
-          const SizedBox(height: 16),
-          Wrap(
-            spacing: 10,
-            runSpacing: 10,
-            children: [
-              _OfferingStatPill(label: offering.priceFrom),
-              _OfferingStatPill(label: offering.eta),
-              const _OfferingStatPill(label: 'Professional finish'),
-            ],
-          ),
-          const Spacer(),
-          FilledButton(
-            onPressed: onBook,
-            style: FilledButton.styleFrom(
-              backgroundColor: KaziTheme.accentGold,
-              foregroundColor: const Color(0xFF153527),
-              padding: const EdgeInsets.symmetric(horizontal: 22, vertical: 18),
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
-              textStyle: const TextStyle(fontWeight: FontWeight.w900),
-            ),
-            child: const Text('Book this offering'),
-          ),
-        ],
-      ),
+        );
+      },
     );
   }
 }
@@ -4128,7 +4134,6 @@ class _BookingsPageState extends State<_BookingsPage> {
           _ResponsiveGrid(
             minTileWidth: 180,
             maxColumns: 4,
-            childAspectRatio: 1.35,
             children: [
               _MetricCard(label: 'All', value: '${liveBookings.length}', detail: 'Visible bookings'),
               _MetricCard(
@@ -4583,7 +4588,6 @@ class _ProviderHubPageState extends State<_ProviderHubPage> {
           _ResponsiveGrid(
             minTileWidth: 240,
             maxColumns: 3,
-            childAspectRatio: 1.1,
             children: controller.incomingJobs
                 .map(
                   (job) => _IncomingJobCard(
@@ -4793,7 +4797,6 @@ class _WalletPageState extends State<_WalletPage> {
           _ResponsiveGrid(
             minTileWidth: 220,
             maxColumns: 3,
-            childAspectRatio: 1.2,
             children: [
               _WalletStatCard(
                 title: _ledgerView == 'Customer' ? 'Available credits' : 'Available balance',
@@ -5928,13 +5931,11 @@ class _ResponsiveGrid extends StatelessWidget {
   const _ResponsiveGrid({
     required this.minTileWidth,
     required this.maxColumns,
-    required this.childAspectRatio,
     required this.children,
   });
 
   final double minTileWidth;
   final int maxColumns;
-  final double childAspectRatio;
   final List<Widget> children;
 
   @override
@@ -5945,18 +5946,21 @@ class _ResponsiveGrid extends StatelessWidget {
           1,
           math.min(maxColumns, ((constraints.maxWidth + 16) / (minTileWidth + 16)).floor()),
         );
+        final tileWidth = columns == 1
+            ? constraints.maxWidth
+            : (constraints.maxWidth - ((columns - 1) * 16)) / columns;
 
-        return GridView.builder(
-          shrinkWrap: true,
-          physics: const NeverScrollableScrollPhysics(),
-          itemCount: children.length,
-          gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
-            crossAxisCount: columns,
-            crossAxisSpacing: 16,
-            mainAxisSpacing: 16,
-            childAspectRatio: childAspectRatio,
-          ),
-          itemBuilder: (context, index) => children[index],
+        return Wrap(
+          spacing: 16,
+          runSpacing: 16,
+          children: children
+              .map(
+                (child) => SizedBox(
+                  width: tileWidth,
+                  child: child,
+                ),
+              )
+              .toList(),
         );
       },
     );

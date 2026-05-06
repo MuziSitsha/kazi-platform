@@ -18,6 +18,7 @@ class KaziApiClient {
   KaziApiClient({String? baseUrl}) : baseUrl = baseUrl ?? _resolveBaseUrl();
 
   final String baseUrl;
+  static const _stagingWebApiBaseUrl = 'https://d1v0xfe0nj4abg.cloudfront.net/api/v1';
 
   static String _resolveBaseUrl() {
     const override = String.fromEnvironment('KAZI_API_BASE_URL');
@@ -26,6 +27,12 @@ class KaziApiClient {
     }
 
     if (kIsWeb) {
+      final host = Uri.base.host;
+      final isLocalHost = host == 'localhost' || host == '127.0.0.1';
+      if (!isLocalHost) {
+        return _stagingWebApiBaseUrl;
+      }
+
       return 'http://127.0.0.1:3002/api/v1';
     }
 
